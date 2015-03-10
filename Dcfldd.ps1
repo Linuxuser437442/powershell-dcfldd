@@ -191,25 +191,24 @@ Function MainProcess{
 
                 $Source = Get-File($CurrentDir)
                 $Source = $Source.Substring(1)                
-                $Filename = Get-Item $Source | Select-Object -ExpandProperty Name
+                $Filename = Get-Item $Source | Select-Object -ExpandProperty Name        
+				#EXECUTE DCLFDD WITH ALL PARAMETERS LOADED
+				$Destination = $CurrentDir + "\Testcase\$Filename"
+				$HashLog = $CurrentDir + "\Testcase\$Filename.txt"
+				
+				#cd $CurrentDir
+				#dclfdd($HashAlgorith, $Source, $Destination, $HashLog)
+
+				cd $CurrentDir #Change directory to where dcfldd located, for some reasons, Invoke-Expression doesn't work as exptect
+				.\dcfldd.exe sizeprobe=if hash=$HashAlgorithm if=$Source of=$Destination hashlog=$HashLog
 
             }else{
-            
                 $Source = Get-Folder
                 $Source = $Source.SubString(0,$Source.IndexOf(" System"))
                 $Filename = Get-Item $Source | Select-Object -ExpandProperty Name
+				#for loop to get all the files from a folder
             }
-
-        
-            #EXECUTE DCLFDD WITH ALL PARAMETERS LOADED
-            $Destination = $CurrentDir + "\Testcase\$Filename"
-            $HashLog = $CurrentDir + "\Testcase\$Filename.txt"
-            
-            #cd $CurrentDir
-            #dclfdd($HashAlgorith, $Source, $Destination, $HashLog)
-
-            cd $CurrentDir #Change directory to where dcfldd located, for some reasons, Invoke-Expression doesn't work as exptect
-            .\dcfldd.exe sizeprobe=if hash=$HashAlgorithm if=$Source of=$Destination hashlog=$HashLog       
+       
 
         }
     }
