@@ -205,10 +205,21 @@ Function MainProcess{
             }else{
                 $Source = Get-Folder
                 $Source = $Source.SubString(0,$Source.IndexOf(" System"))
-                $Filename = Get-Item $Source | Select-Object -ExpandProperty Name
+				#make an array of the items in the folder
+				$files = Get-ChildItem -Path $Source
 				#for loop to get all the files from a folder
+                foreach ($file in $files)
+				{
+					$Filename = $file.Name
+					$Destination = $CurrentDir + "\Testcase\$Filename"
+					$HashLog = $CurrentDir + "\Testcase\$Filename.txt"
+
+					cd $CurrentDir #Change directory to where dcfldd located, for some reasons, Invoke-Expression doesn't work as exptect
+					.\dcfldd.exe sizeprobe=if hash=$HashAlgorithm if=$Filename of=$Destination hashlog=$HashLog
+				}
+				#$Filename = Get-Item $Source | Select-Object -ExpandProperty Name
+				
             }
-       
 
         }
     }
