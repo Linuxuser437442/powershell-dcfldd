@@ -1,4 +1,6 @@
-﻿###############################################################################
+﻿Param($Global:TargetDir = '', $Global:CaseFolder='', $Global:TempFolder='')
+
+###############################################################################
 # MENU FUNCTION
 ###############################################################################
 Function DrawMenu {
@@ -27,7 +29,7 @@ Function DrawMenu {
     }
 }
 
-function Menu {
+Function Menu {
     ## Generate a small "DOS-like" menu.
     ## Choose a menuitem using up and down arrows, select by pressing ENTER
     param ([array]$menuItems, $menuTitle = "MENU")
@@ -52,6 +54,7 @@ function Menu {
 ###############################################################################
 Function MainMenu{   
     clear
+    $Selection = ''
     $options=@()
     $options = "COPY FILES/FOLDER", "SECURLY WIPE DISK" 
    
@@ -67,10 +70,10 @@ Function File/Folder{
     
     $Selection=''
     $options=@()
-    $options= "FILE", "FOLDER"
+    $options= "FILE", "FOLDER", "DISK"
 
     if ($Selection -eq ''){
-        $Selection = Menu $options "Are You Copying FILE or FOLDER?"
+        $Selection = Menu $options "Are You Copying FILE, FOLDER, OR DISK?"
     }
 
     return $Selection
@@ -94,7 +97,7 @@ Function HashAlgorithm{
 #DIALOG TO FIND PATH
 ###############################################################################
 
-Function Get-Folder() 
+Function Get-Folder
 {
     param([String]$path = 0,
           [String]$message = 'Select a folder'
@@ -115,7 +118,7 @@ Function Get-Folder()
 }#end function Get-Folder
 
 
-Function Get-File()
+Function Get-File
 {   
     param([String]$initialDirectory,
           [String]$title = 'Select a file'
@@ -137,20 +140,103 @@ Function Get-File()
     }
 } #end function Get-FileName
 
+###############################################################################
+#CASE CREATION
+###############################################################################
+Function CaseCreation{
+
+    $CaseName = Read-Host "Please name your case"        
+    return $CaseName
+}
 
 ###############################################################################
-#DCLFDD FUNCTION
+#DCLFDD COPY FILE
 ###############################################################################
-Function dclfdd{
+Function dclfdd-file{
     
-    Param([String]$HashAlgorithm,
+    Param([Parameter(Mandatory=$True,Position=1)]
+          [string]$CurrentDir,
+          [Parameter(Mandatory=$True,Position=2)]
+          [String]$HashAlgorithm,
+          [Parameter(Mandatory=$True,Position=3)]
           [String]$Source,
+          [Parameter(Mandatory=$True,Position=4)]
           [String]$Destination,
-          [String]$HashLog)
-
-    #.\dcfldd.exe sizeprobe=if hash=$HashAlgorithm if=$Source of=$Destination hashlog=$HashLog
+          [Parameter(Mandatory=$False,Position=5)]
+          [String]$HashLog="default.hash")
+    
+    cd $CurrentDir
+    .\dcfldd.exe sizeprobe=if hash=$HashAlgorithm if=$Source of=$Destination hashlog=$HashLog
     
 }
+
+###############################################################################
+#DCLFDD COPY FOLDER
+###############################################################################
+Function dclfdd-folder{
+
+    param([Parameter(Mandatory=$True)]
+          [String]$SourceFolder
+          )
+
+    process{
+        
+        $items = Get-ChildItem -Path $SourceFolder
+        foreach ($item in $items){
+            if(Test-Path $item.FullName -PathType Container){
+                
+                ValidateDest $item.FullName
+                dclfdd-folder $item.FullName
+
+            }else{                
+                
+                $Filename = $item.Name
+				$Source = $SourceFolder + "\" + $Filename
+                
+                #Return destination path
+                ValidateDest $SourceFolder
+				$Destination = $Global:TempFolder + "\$Filename"
+				$HashLog = $Global:TempFolder + "\$Filename.hash"
+
+                #EXECUTE DCLFDD WITH ALL PARAMETERS LOADED                				
+				dclfdd-file $CurrentDir $HashAlgorithm $Source $Destination $HashLog
+
+            }
+        }
+
+    }
+}
+
+###############################################################################
+#VALIDATE DESTINATION
+#
+#This function will validate the existence of destination folder
+#If it is not existed, create a destination then return the path
+###############################################################################
+
+Function ValidateDest{
+    param([Parameter(Mandatory=$True,Position=1)]
+          [String]$SourceDir
+          )
+
+    process{        
+        
+        $FolderName = Get-Item $Global:TargetDir | Select-Object -ExpandProperty Name
+        $StartIndex = $Global:TargetDir.LastIndexOf("\") + $FolderName.Length + 1
+        
+        $TempPath = $SourceDir.Substring($StartIndex, $SourceDir.Length - $StartIndex)
+
+        $DestinationDir = $Global:CaseFolder + "\$TempPath"
+        if(!(Test-Path $DestinationDir -PathType Container)){
+            MKDIR $DestinationDir
+        }
+
+        $Global:TempFolder = $DestinationDir
+
+    }
+
+}
+
 
 ###############################################################################
 #MAIN PROCESS
@@ -164,19 +250,22 @@ Function MainProcess{
           [String]$Selection = '',
           [String]$HashAlgorith = '',
           [String]$Source='',
-          [String]$Filename=''
+          [String]$Filename='',
+          [String]$CaseName = ''
           )
 
     Process{
-    
         
-        $Selection = MainMenu     
+        #CREATE CASE PROFILE
+        $CaseName = CaseCreation
+        $CasePath = $CurrentDir + "\Cases\$CaseName"
+        MKDIR $CasePath
+        
+        #START MAIN MENU
+        $Selection = MainMenu
+            
 
         If($Selection -eq "COPY FILES/FOLDER"){
-        
-            #GET CURRENT DIR
-            $CurrentDir=Split-Path $MyInvocation.MyCommand.Path               
-            
         
             #CHOOSE HASH ALGORITHM
             $HashAlgorithm= HashAlgorithm
@@ -186,39 +275,38 @@ Function MainProcess{
             $Source = File/Folder
 
 
-            #CHOOSE SOURCE PATH
+            #CONDITION FOR EACH OPTION
             if($Source -eq "FILE"){
 
                 $Source = Get-File($CurrentDir)
                 $Source = $Source.Substring(1)                
-                $Filename = Get-Item $Source | Select-Object -ExpandProperty Name        
-				#EXECUTE DCLFDD WITH ALL PARAMETERS LOADED
-				$Destination = $CurrentDir + "\Testcase\$Filename"
-				$HashLog = $CurrentDir + "\Testcase\$Filename.txt"
-				
-				#cd $CurrentDir
-				#dclfdd($HashAlgorith, $Source, $Destination, $HashLog)
+                $Filename = Get-Item $Source | Select-Object -ExpandProperty Name				
+				$Destination = $CurrentDir + "\Cases\$CaseName\$Filename"
+				$HashLog = $CurrentDir + "\Cases\$CaseName\$Filename.hash"
 
-				cd $CurrentDir #Change directory to where dcfldd located, for some reasons, Invoke-Expression doesn't work as exptect
-				.\dcfldd.exe sizeprobe=if hash=$HashAlgorithm if=$Source of=$Destination hashlog=$HashLog
+                #EXECUTE DCLFDD WITH ALL PARAMETERS LOADED                				
+				dclfdd-file $CurrentDir $HashAlgorithm $Source $Destination $HashLog
 
-            }else{
+            }elseif($Source -eq "FOLDER"){
+                
                 $Source = Get-Folder
-                $Source = $Source.SubString(0,$Source.IndexOf(" System"))
-				#make an array of the items in the folder
-				$files = Get-ChildItem -Path $Source
-				#for loop to get all the files from a folder
-                foreach ($file in $files)
-				{
-					$Filename = $file.Name
-					$FilePath = $Source + "\" + $Filename
-					$Destination = $CurrentDir + "\Testcase\$Filename"
-					$HashLog = $CurrentDir + "\Testcase\$Filename.txt"
-					cd $CurrentDir #Change directory to where dcfldd located, for some reasons, Invoke-Expression doesn't work as exptect
-					.\dcfldd.exe sizeprobe=if hash=$HashAlgorithm if=$FilePath of=$Destination hashlog=$HashLog
-				}
-				#$Filename = Get-Item $Source | Select-Object -ExpandProperty Name
-				
+                $SourceFolder = $Source.SubString(0,$Source.IndexOf(" System"))
+                $FolderName = Get-Item $SourceFolder | Select-Object -ExpandProperty Name
+				$Global:TargetDir = $SourceFolder #This variable is used for recrusion purpose.
+                $Global:CaseFolder = $CurrentDir + "\Cases\$CaseName\$FolderName"
+                MKDIR $Global:CaseFolder
+                dclfdd-folder $SourceFolder            
+                
+            }else{
+                
+                $Drive = Read-Host "Please type which drive you want to image (e.g. C or E)"
+                $DriveFormat = "\\.\" + $Drive.ToLower() + ":"
+                $Destination = $CasePath + "\$Drive.dd"
+                $HashLog = $CurrentDir + "\Cases\$CaseName\$Drive.hash"
+
+                dclfdd-file $CurrentDir $HashAlgorithm $DriveFormat $Destination $HashLog
+
+
             }
 
         }
