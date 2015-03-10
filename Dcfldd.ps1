@@ -211,11 +211,11 @@ Function MainProcess{
                 foreach ($file in $files)
 				{
 					$Filename = $file.Name
+					$FilePath = $Source + "\" + $Filename
 					$Destination = $CurrentDir + "\Testcase\$Filename"
 					$HashLog = $CurrentDir + "\Testcase\$Filename.txt"
-
 					cd $CurrentDir #Change directory to where dcfldd located, for some reasons, Invoke-Expression doesn't work as exptect
-					.\dcfldd.exe sizeprobe=if hash=$HashAlgorithm if=$Filename of=$Destination hashlog=$HashLog
+					.\dcfldd.exe sizeprobe=if hash=$HashAlgorithm if=$FilePath of=$Destination hashlog=$HashLog
 				}
 				#$Filename = Get-Item $Source | Select-Object -ExpandProperty Name
 				
